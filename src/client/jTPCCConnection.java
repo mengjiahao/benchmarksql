@@ -12,6 +12,10 @@
 import java.util.*;
 import java.sql.*;
 
+/**  
+ * TPC-C SQL语句。用 PreparedStatement 加速。
+ * https://github.com/domino-succ/tpcc-hbase/wiki/%E4%B8%AD%E6%96%87-TPC-C%E7%AE%80%E4%BB%8B
+ */
 public class jTPCCConnection
 {
     private Connection          dbConn = null;
@@ -61,6 +65,7 @@ public class jTPCCConnection
 	this.dbConn = dbConn;
 	this.dbType = dbType;
 	stmtNewOrderSelectStockBatch = new PreparedStatement[16];
+	// 主键查询
 	String st = "SELECT s_i_id, s_w_id, s_quantity, s_data, " +
 				"       s_dist_01, s_dist_02, s_dist_03, s_dist_04, " +
 				"       s_dist_05, s_dist_06, s_dist_07, s_dist_08, " +
@@ -82,6 +87,7 @@ public class jTPCCConnection
 	}
 
 	// PreparedStataments for NEW_ORDER
+	// JOIN + 主键查询。这里使用 w_id 作为 partition column 仍可行。
 	stmtNewOrderSelectWhseCust = dbConn.prepareStatement(
 		"SELECT c_discount, c_last, c_credit, w_tax " +
 		"    FROM bmsql_customer " +
@@ -157,6 +163,7 @@ public class jTPCCConnection
 		"SELECT c_data " +
 		"    FROM bmsql_customer " +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
+	// 主键修改
 	stmtPaymentUpdateWarehouse = dbConn.prepareStatement(
 		"UPDATE bmsql_warehouse " +
 		"    SET w_ytd = w_ytd + ? " +
@@ -194,11 +201,13 @@ public class jTPCCConnection
 		"SELECT c_first, c_middle, c_last, c_balance " +
 		"    FROM bmsql_customer " +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
+	// 	顾客最近的订单查询。ORDER + LIMIT 键排序查询（单建排序）。
 	stmtOrderStatusSelectLastOrder = dbConn.prepareStatement(
 		"SELECT o_id, o_entry_d, o_carrier_id " +
 		"    FROM bmsql_oorder " +
 		"    WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? " +
 		"      ORDER BY o_id DESC LIMIT 1");
+	// 单个订单的所有明细查询。	
 	stmtOrderStatusSelectOrderLine = dbConn.prepareStatement(
 		"SELECT ol_i_id, ol_supply_w_id, ol_quantity, " +
 		"       ol_amount, ol_delivery_d " +
@@ -228,6 +237,7 @@ public class jTPCCConnection
 		break;
 
 	    default:
+		// 查询某地区内一定范围订单内的打折商品数量。
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
 		    "SELECT count(*) AS low_stock FROM (" +
 		    "    SELECT s_w_id, s_i_id, s_quantity " +
@@ -247,6 +257,7 @@ public class jTPCCConnection
 
 
 		// PreparedStatements for DELIVERY_BG
+	// 键排序查询。	
     stmtDeliveryBGSelectOldestNewOrder = dbConn.prepareStatement(
         "SELECT no_o_id " +
         "    FROM bmsql_new_order " +
@@ -273,7 +284,8 @@ public class jTPCCConnection
 		"    WHERE (o_w_id,o_d_id,o_id) IN (" +
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?)," +
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?))");
-
+    
+	// 订单的明细数量 聚合查询。
 	stmtDeliveryBGSelectSumOLAmount = dbConn.prepareStatement(
 		"SELECT sum(ol_amount) AS sum_ol_amount, ol_d_id" +
 		"    FROM bmsql_order_line " +
@@ -282,7 +294,7 @@ public class jTPCCConnection
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?)" +
 		") GROUP BY ol_d_id");
 
-
+    // 多个订单的所有明细修改。
 	stmtDeliveryBGUpdateOrderLine = dbConn.prepareStatement(
 		"UPDATE bmsql_order_line " +
 		"    SET ol_delivery_d = ? " +

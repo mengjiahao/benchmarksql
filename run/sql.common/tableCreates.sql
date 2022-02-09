@@ -4,7 +4,7 @@ create table bmsql_config (
 );
 
 create table bmsql_warehouse (
-  w_id        integer   not null,
+  w_id        integer   not null, // 仓库id
   w_ytd       decimal(12,2),
   w_tax       decimal(4,4),
   w_name      varchar(10),
@@ -16,8 +16,8 @@ create table bmsql_warehouse (
 );
 
 create table bmsql_district (
-  d_w_id       integer       not null,
-  d_id         integer       not null,
+  d_w_id       integer       not null, // 仓库id
+  d_id         integer       not null, // 地区id
   d_ytd        decimal(12,2),
   d_tax        decimal(4,4),
   d_next_o_id  integer,
@@ -30,9 +30,9 @@ create table bmsql_district (
 );
 
 create table bmsql_customer (
-  c_w_id         integer        not null,
-  c_d_id         integer        not null,
-  c_id           integer        not null,
+  c_w_id         integer        not null, // 仓库id
+  c_d_id         integer        not null, // 地区id
+  c_id           integer        not null, // 用户id
   c_discount     decimal(4,4),
   c_credit       char(2),
   c_last         varchar(16),
@@ -68,15 +68,15 @@ create table bmsql_history (
 );
 
 create table bmsql_new_order (
-  no_w_id  integer   not null,
-  no_d_id  integer   not null,
-  no_o_id  integer   not null
+  no_w_id  integer   not null,  // 仓库id
+  no_d_id  integer   not null,  // 地区id
+  no_o_id  integer   not null   // 新订单id
 );
 
 create table bmsql_oorder (
-  o_w_id       integer      not null,
-  o_d_id       integer      not null,
-  o_id         integer      not null,
+  o_w_id       integer      not null,  // 仓库id
+  o_d_id       integer      not null,  // 地区id
+  o_id         integer      not null,  // 订单id
   o_c_id       integer,
   o_carrier_id integer,
   o_ol_cnt     integer,
@@ -84,12 +84,13 @@ create table bmsql_oorder (
   o_entry_d    timestamp
 );
 
+// 订单明细，1个订单bmsql_oorder可能包含多个bmsql_order_line
 create table bmsql_order_line (
-  ol_w_id         integer   not null,
-  ol_d_id         integer   not null,
-  ol_o_id         integer   not null,
+  ol_w_id         integer   not null, // 仓库id
+  ol_d_id         integer   not null, // 地区id
+  ol_o_id         integer   not null, // 订单id
   ol_number       integer   not null,
-  ol_i_id         integer   not null,
+  ol_i_id         integer   not null, // 商品id
   ol_delivery_d   timestamp,
   ol_amount       decimal(6,2),
   ol_supply_w_id  integer,
@@ -98,7 +99,7 @@ create table bmsql_order_line (
 );
 
 create table bmsql_item (
-  i_id     integer      not null,
+  i_id     integer      not null, // 商品id
   i_name   varchar(24),
   i_price  decimal(5,2),
   i_data   varchar(50),
@@ -106,9 +107,9 @@ create table bmsql_item (
 );
 
 create table bmsql_stock (
-  s_w_id       integer       not null,
-  s_i_id       integer       not null,
-  s_quantity   integer,
+  s_w_id       integer       not null, // 仓库id
+  s_i_id       integer       not null, // 商品id
+  s_quantity   integer,                // 商品库存
   s_ytd        integer,
   s_order_cnt  integer,
   s_remote_cnt integer,

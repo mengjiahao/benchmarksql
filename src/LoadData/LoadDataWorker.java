@@ -11,6 +11,9 @@ import java.sql.*;
 import java.util.*;
 import java.io.*;
 
+/**
+ * 加载 TPC-C 数据。
+ */
 public class LoadDataWorker implements Runnable
 {
     private int                 worker;
@@ -271,6 +274,7 @@ public class LoadDataWorker implements Runnable
 	    stmtConfig.execute();
 	}
 
+	// item 有 100000。
 	for (i_id = 1; i_id <= 100000; i_id++)
 	{
 	    String iData;
@@ -666,6 +670,7 @@ public class LoadDataWorker implements Runnable
 
 	    for (int o_id = 1; o_id <= 3000; o_id++)
 	    {
+		// 每个订单随机生成 5～15条 bmsql_order_line	
 		int     o_ol_cnt = rnd.nextInt(5, 15);
 
 			// commit district and history when 100 records
