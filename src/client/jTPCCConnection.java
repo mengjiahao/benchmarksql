@@ -13,7 +13,7 @@ import java.util.*;
 import java.sql.*;
 
 /**  
- * TPC-C SQL语句。用 PreparedStatement 加速。
+ * 准备 TPC-C SQL语句。用 PreparedStatement 加速。
  * https://github.com/domino-succ/tpcc-hbase/wiki/%E4%B8%AD%E6%96%87-TPC-C%E7%AE%80%E4%BB%8B
  */
 public class jTPCCConnection
@@ -93,6 +93,7 @@ public class jTPCCConnection
 		"    FROM bmsql_customer " +
 		"    JOIN bmsql_warehouse ON (w_id = c_w_id) " +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
+	// 大多数请求都是 主键 查询.
 	stmtNewOrderSelectDist = dbConn.prepareStatement(
 		"SELECT d_tax, d_next_o_id " +
 		"    FROM bmsql_district " +
@@ -220,6 +221,7 @@ public class jTPCCConnection
 	{
 	    case jTPCCConfig.DB_POSTGRES:
 	    case jTPCCConfig.DB_MYSQL:
+		// 增加 AS L 别名。
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
 		    "SELECT count(*) AS low_stock FROM (" +
 		    "    SELECT s_w_id, s_i_id, s_quantity " +

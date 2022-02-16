@@ -11,6 +11,9 @@ import org.apache.log4j.*;
 import java.util.*;
 import java.sql.*;
 
+/**
+ * 设置TPC-C语句所需的参数.
+ */
 public class jTPCCTData
 {
     protected int               numWarehouses = 0;
@@ -770,6 +773,7 @@ public class jTPCCTData
 	    stmt = db.stmtPaymentSelectDistrict;
 	    stmt.setInt(1, payment.w_id);
 	    stmt.setInt(2, payment.d_id);
+		// 同步发送.
 	    rs = stmt.executeQuery();
 	    if (!rs.next())
 	    {
@@ -778,6 +782,7 @@ public class jTPCCTData
 			" W_ID=" + payment.w_id +
 			" D_ID=" + payment.d_id + " not found");
 	    }
+		// 返回值都用string.
 	    payment.d_name = rs.getString("d_name");
 	    payment.d_street_1 = rs.getString("d_street_1");
 	    payment.d_street_2 = rs.getString("d_street_2");

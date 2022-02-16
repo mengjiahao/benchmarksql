@@ -11,7 +11,9 @@ import java.io.*;
 import java.sql.*;
 import java.util.*;
 
-
+/**
+ *  单个JDBC 客户端测试.
+ */
 public class ExecJDBC {
 
 
@@ -28,9 +30,11 @@ public class ExecJDBC {
     ini.load( new FileInputStream(System.getProperty("prop")));
 
     // Register jdbcDriver
+    // 仍然是通过 Class.forName + DriverManager.getConnection 获取连接.
     Class.forName(ini.getProperty( "driver" ));
 
     // make connection
+    // 只使用1个连接.
     conn = DriverManager.getConnection(ini.getProperty("conn"),
       ini.getProperty("user"),ini.getProperty("password"));
     conn.setAutoCommit(true);
@@ -51,6 +55,7 @@ public class ExecJDBC {
            if (line.startsWith("--")) {
               System.out.println(line);  // print comment line
            } else {
+           // line结尾为什么会有\;?
 	       if (line.endsWith("\\;"))
 	       {
 	         sql.append(line.replaceAll("\\\\;", ";"));

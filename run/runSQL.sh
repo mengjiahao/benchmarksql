@@ -2,6 +2,7 @@
 
 # ----
 # Check command line usage
+# ./runSQL.sh props.mysql sql.mysql/tableCreates.sql
 # ----
 if [ $# -ne 2 ] ; then
     echo "usage: $(basename $0) PROPS_FILE SQL_FILE" >&2
@@ -42,6 +43,7 @@ fi
 
 # ----
 # Set myCP according to the database type.
+# 调用 java -D<name>=<value> ExecJDBC。 System.getProperty 获取属性。
 # ----
 setCP || exit 1
 

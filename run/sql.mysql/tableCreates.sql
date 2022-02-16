@@ -31,6 +31,7 @@ create table bmsql_district (
   constraint pk_district primary key (d_w_id, d_id)
 );
 
+-- 注意除了主键索引外，key还创建了额外索引.
 create table bmsql_customer (
   c_w_id         integer        not null,
   c_d_id         integer        not null,

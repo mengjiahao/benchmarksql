@@ -1,5 +1,6 @@
 db=mysql
 driver=com.mysql.jdbc.Driver
+// 注意这里打开了JDBC useServerPrepStmts，以及 rewriteBatchedStatements 批量. 这里使用数据库名 tpcc.
 conn=jdbc:mysql://localhost:4000/tpcc?useSSL=false&useServerPrepStmts=true&useConfigs=maxPerformance&rewriteBatchedStatements=true
 user=root
 password=

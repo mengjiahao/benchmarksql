@@ -575,7 +575,9 @@ public class LoadDataWorker implements Runnable
 			stmtCustomer.setInt(1, w_id);
 		    stmtCustomer.setInt(2, d_id);
 			stmtCustomer.setInt(3, c_id);
+			// decimal使用Double.
 			stmtCustomer.setDouble(4, ((double)rnd.nextLong(0, 5000)) / 10000.0);
+			// char 与 varchar 都使用 String.
 			if (rnd.nextInt(1, 100) <= 90)
 				stmtCustomer.setString(5, "GC");
 			else
@@ -596,6 +598,7 @@ public class LoadDataWorker implements Runnable
 			stmtCustomer.setString(16, rnd.getState());
 			stmtCustomer.setString(17, rnd.getNString(4, 4) + "11111");
 			stmtCustomer.setString(18, rnd.getNString(16, 16));
+			// timestamp 使用 Timestamp.
 			stmtCustomer.setTimestamp(19, new java.sql.Timestamp(System.currentTimeMillis()));
 			stmtCustomer.setString(20, "OE");
 		    stmtCustomer.setString(21, rnd.getAString(300, 500));

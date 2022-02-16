@@ -14,7 +14,9 @@ import java.sql.Date;
 import java.util.*;
 import javax.swing.*;
 
-
+/**
+ * 模拟1个终端用户，每个 jTPCCTerminal 拥有1个 Connection.
+ */
 public class jTPCCTerminal implements jTPCCConfig, Runnable
 {
     private static org.apache.log4j.Logger log = Logger.getLogger(jTPCCTerminal.class);
