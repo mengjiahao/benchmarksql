@@ -13,6 +13,7 @@ import java.io.*;
 
 /**
  * 加载 TPC-C 数据。
+ * 注意 ITEM_COUNT, STOCK_COUNT, CUSTOMER_COUNT 等都用的常数, 难以修改.
  */
 public class LoadDataWorker implements Runnable
 {
@@ -274,7 +275,7 @@ public class LoadDataWorker implements Runnable
 	    stmtConfig.execute();
 	}
 
-	// item 有 100000。
+	// item 总共有 100000 个.
 	for (i_id = 1; i_id <= 100000; i_id++)
 	{
 	    String iData;
@@ -673,7 +674,7 @@ public class LoadDataWorker implements Runnable
 
 	    for (int o_id = 1; o_id <= 3000; o_id++)
 	    {
-		// 每个订单随机生成 5～15条 bmsql_order_line	
+		// 每个订单order随机生成 5～15条 bmsql_order_line
 		int     o_ol_cnt = rnd.nextInt(5, 15);
 
 			// commit district and history when 100 records
@@ -732,6 +733,7 @@ public class LoadDataWorker implements Runnable
 
 		/*
 		 * Create the ORDER_LINE rows for this ORDER.
+		 * 每个订单order随机生成 o_ol_cnt条 bmsql_order_line
 		 */
 		for (int ol_number = 1; ol_number <= o_ol_cnt; ol_number++)
 		{

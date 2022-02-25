@@ -188,6 +188,7 @@ public class jTPCCRandom
      * getItemID()
      *
      *     Produce a non uniform random Item ID.
+     * 注意 100000 为 ITEM 总数.
      */
     public int getItemID()
     {
@@ -199,6 +200,7 @@ public class jTPCCRandom
      * getCustomerID()
      *
      *     Produce a non uniform random Customer ID.
+     * 注意这里 3000 是 每个 DISTRICT 中 CUSTOMER 数。
      */
     public int getCustomerID()
     {
@@ -210,6 +212,7 @@ public class jTPCCRandom
      * getCLast(num)
      *
      *     Produce the syllable representation for C_LAST of [0 .. 999]
+     * 注意这里一般所有可能性都有.
      */
     public String getCLast(int num)
     {

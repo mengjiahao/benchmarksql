@@ -13,6 +13,7 @@ import java.sql.*;
 
 /**
  * 设置TPC-C语句所需的参数.
+ * 注意用了 JDBC 显示事务模式.
  */
 public class jTPCCTData
 {

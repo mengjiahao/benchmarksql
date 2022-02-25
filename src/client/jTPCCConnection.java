@@ -94,6 +94,7 @@ public class jTPCCConnection
 		"    JOIN bmsql_warehouse ON (w_id = c_w_id) " +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
 	// 大多数请求都是 主键 查询.
+	// 注意	sqlite 不支持 select for update.
 	stmtNewOrderSelectDist = dbConn.prepareStatement(
 		"SELECT d_tax, d_next_o_id " +
 		"    FROM bmsql_district " +
@@ -267,6 +268,7 @@ public class jTPCCConnection
         "    ORDER BY no_o_id ASC" +
         "    LIMIT 1" +
         "    FOR UPDATE");
+	// 注意 sqlite 不允许这种判断多列是否在数组的语法 (c0,c1) in ((?,?)).
 	stmtDeliveryBGDeleteOldestNewOrder = dbConn.prepareStatement(
 		"DELETE FROM bmsql_new_order " +
 		"    WHERE (no_w_id,no_d_id,no_o_id) IN (" +
