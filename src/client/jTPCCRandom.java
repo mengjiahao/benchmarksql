@@ -26,9 +26,10 @@ public class jTPCCRandom
 	    "BAR", "OUGHT", "ABLE", "PRI", "PRES",
 	    "ESE", "ANTI", "CALLY", "ATION", "EING"};
 
-    private static long         nURandCLast;
-    private static long         nURandCC_ID;
-    private static long         nURandCI_ID;
+	// id的初始offset.
+    private static long         nURandCLast; // bmsql_customer.c_last
+    private static long         nURandCC_ID; // bmsql_customer.c_id
+    private static long         nURandCI_ID; // bmsql_item.i_id
     private static boolean      initialized = false;
 
     private     Random  random;
@@ -111,7 +112,7 @@ public class jTPCCRandom
     }
 
 
-    /*
+    /**
      * nextLong(x, y)
      *
      *     Produce a random number uniformly distributed in [x .. y]
@@ -121,7 +122,7 @@ public class jTPCCRandom
 	return (long)(random.nextDouble() * (y - x + 1) + x);
     }
 
-    /*
+    /**
      * nextInt(x, y)
      *
      *     Produce a random number uniformly distributed in [x .. y]
@@ -131,7 +132,7 @@ public class jTPCCRandom
 	return (int)(random.nextDouble() * (y - x + 1) + x);
     }
 
-    /*
+    /**
      * getAString(x, y)
      *
      *     Procude a random alphanumeric string of length [x .. y].
@@ -184,11 +185,10 @@ public class jTPCCRandom
 	return result;
     }
 
-    /*
-     * getItemID()
-     *
-     *     Produce a non uniform random Item ID.
-     * 注意 100000 为 ITEM 总数.
+    /**
+     * Produce a non uniform random Item ID.
+	 * 返回值是 [1, 100000];
+     * 注意 100000 为 ITEM 总数. 100000 写固定了.
      */
     public int getItemID()
     {
@@ -196,11 +196,10 @@ public class jTPCCRandom
 	       % 100000) + 1);
     }
 
-    /*
-     * getCustomerID()
-     *
-     *     Produce a non uniform random Customer ID.
-     * 注意这里 3000 是 每个 DISTRICT 中 CUSTOMER 数。
+    /**
+     * Produce a non uniform random Customer ID.
+	 * 返回值是 [1, 3000];
+     * 注意这里 3000 是 每个 DISTRICT 中 CUSTOMER 数. 3000 写固定了.
      */
     public int getCustomerID()
     {
@@ -208,11 +207,10 @@ public class jTPCCRandom
 	       % 3000) + 1);
     }
 
-    /*
-     * getCLast(num)
-     *
-     *     Produce the syllable representation for C_LAST of [0 .. 999]
+    /**
+     * Produce the syllable representation for C_LAST of [0 .. 999]
      * 注意这里一般所有可能性都有.
+	 * num 取值范围为 [0, 1000);
      */
     public String getCLast(int num)
     {
@@ -220,6 +218,7 @@ public class jTPCCRandom
 
 	for (int i = 0; i < 3; i++)
 	{
+		// 名字只有10种取值, 拼接3次.
 	    result = cLastTokens[num % 10] + result;
 	    num /= 10;
 	}
@@ -227,10 +226,8 @@ public class jTPCCRandom
 	return result;
     }
 
-    /*
-     * getCLast()
-     *
-     *     Procude a non uniform random Customer Last Name.
+    /**
+     * Procude a non uniform random Customer Last Name.
      */
     public String getCLast()
     {
@@ -239,6 +236,10 @@ public class jTPCCRandom
 	return getCLast((int)num);
     }
 
+	/**
+	 *
+	 * @return 返回2个字节，比如 AZ;
+	 */
     public String getState()
     {
 	String result = new String();

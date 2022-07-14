@@ -16,7 +16,36 @@ import java.util.*;
  */
 public class ExecJDBC {
 
+    /**
+     mysql-connector-java-5.1.45 ( Revision: 9131eefa398531c7dc98776e8a3fe839e544c5
+     b2 ) SELECT  @@session.auto_increment_increment AS auto_increment_increment, @@character_set_client AS character_set_client, @@characte
+    r_set_connection AS character_set_connection, @@character_set_results AS character_set_results, @@character_set_server AS character_set_s
+    erver, @@collation_server AS collation_server, @@init_connect AS init_connect, @@interactive_timeout AS interactive_timeout, @@license AS
+    license, @@lower_case_table_names AS lower_case_table_names, @@max_allowed_packet AS max_allowed_packet, @@net_buffer_length AS net_buff
+    er_length, @@net_write_timeout AS net_write_timeout, @@query_cache_size AS query_cache_size, @@query_cache_type AS query_cache_type, @@sq
+    l_mode AS sql_mode, @@system_time_zone AS system_time_zone, @@time_zone AS time_zone, @@tx_isolation AS tx_isolation, @@wait_timeout AS w
+    ait_timeout;
+     SHOW WARNINGS
+     SET NAMES utf8mb4
+     SET character_set_results = NULL
+     SET autocommit=1
+     SET sql_mode='NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES'
+     */
 
+    /**
+     mysql-connector-java-8.0.27 (Revision: e920b979015ae7117d60d72bcc8f077a839cd79
+     1) SELECT  @@session.auto_increment_increment AS auto_increment_increment, @@character_set_client AS character_set_client, @@character_
+    set_connection AS character_set_connection, @@character_set_results AS character_set_results, @@character_set_server AS character_set_ser
+    ver, @@collation_server AS collation_server, @@collation_connection AS collation_connection, @@init_connect AS init_connect, @@interactiv
+    e_timeout AS interactive_timeout, @@license AS license, @@lower_case_table_names AS lower_case_table_names, @@max_allowed_packet AS max_a
+    llowed_packet, @@net_write_timeout AS net_write_timeout, @@performance_schema AS performance_schema, @@query_cache_size AS query_cache_si
+    ze, @@query_cache_type AS query_cache_type, @@sql_mode AS sql_mode, @@system_time_zone AS system_time_zone, @@time_zone AS time_zone, @@t
+    ransaction_isolation AS transaction_isolation, @@wait_timeout AS wait_timeout
+     SHOW WARNINGS
+     SET character_set_results = NULL
+     SET autocommit=1
+     SET sql_mode='NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES'
+     */
   public static void main(String[] args) {
 
     Connection conn = null;

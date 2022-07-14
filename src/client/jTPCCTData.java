@@ -40,7 +40,7 @@ public class jTPCCTData
     public int                  tree_height;
 
     private int                 transType;
-    private long                transDue;
+    private long                transDue; // 事务开始时间
     private long                transStart;
     private long                transEnd;
     private boolean             transRbk;
@@ -86,6 +86,9 @@ public class jTPCCTData
 	return terminalDistrict;
     }
 
+	/**
+	 * 根据 transType 执行事务;
+	 */
     public void execute(Logger log, jTPCCConnection db)
 	throws Exception
     {
@@ -263,29 +266,37 @@ public class jTPCCTData
 	delivery        = null;
 	deliveryBG      = null;
 
+	/** 创造 bmsql_order_line */
+	// 一个 newOrder 中所有订单来自同一地区的仓库
 	newOrder.w_id   = terminalWarehouse;    // 2.4.1.1
 	newOrder.d_id   = rnd.nextInt(1, 10);   // 2.4.1.2
 	newOrder.c_id   = rnd.getCustomerID();
+	// 一个用户一个订单有 o_ol_cnt 个商品.
 	o_ol_cnt        = rnd.nextInt(5, 15);   // 2.4.1.3
 
+	// o_ol_cnt [5, 15], 前 o_ol_cnt 行赋值
 	while (i < o_ol_cnt)                    // 2.4.1.5
 	{
-	    newOrder.ol_i_id[i]         = rnd.getItemID();
-	    if (rnd.nextInt(1, 100) <= 99)
+	    newOrder.ol_i_id[i]         = rnd.getItemID(); // [1, 100000]
+	    if (rnd.nextInt(1, 100) <= 99) // 99% 是 terminalWarehouse
 		newOrder.ol_supply_w_id[i] = terminalWarehouse;
 	    else
-		newOrder.ol_supply_w_id[i] = rnd.nextInt(1, numWarehouses);
-	    newOrder.ol_quantity[i] = rnd.nextInt(1, 10);
+		newOrder.ol_supply_w_id[i] = rnd.nextInt(1, numWarehouses); // 1% 是 [1, numWarehouses]. 可能是不同仓库.
+
+	    newOrder.ol_quantity[i] = rnd.nextInt(1, 10); // 这是购买的此种商品数量, [1, 10]
 		newOrder.found[i] = false;
 		i++;
 	}
 
+	// item_id 在这里设置
 	if (rnd.nextInt(1, 100) == 1)           // 2.4.1.4
 	{
+		// 1% item_id > 1000000. 制造错误 item_id.
 	    newOrder.ol_i_id[i - 1] += (rnd.nextInt(1, 9) * 1000000);
 	    transRbk = true;
 	}
 
+	// 后续的行清零，item_id=0
 	// Zero out remainint lines
 	while (i < 15)
 	{
@@ -313,6 +324,7 @@ public class jTPCCTData
 
 	// The o_entry_d is now.
 	o_entry_d = System.currentTimeMillis();
+	// 注意这里 newOrder 数据已经由 generateNewOrder 生成了.
 	newOrder.o_entry_d = new java.sql.Timestamp(o_entry_d).toString();
 
 	/*
@@ -328,13 +340,17 @@ public class jTPCCTData
 	 */
 	for (ol_cnt = 0; ol_cnt < 15 && newOrder.ol_i_id[ol_cnt] != 0; ol_cnt++)
 	{
+		// 获取 ol_i_id != 0 的有效行索引存入 ol_seq.
 	    ol_seq[ol_cnt] = ol_cnt;
 
+		// 1%概率不都是 terminalWarehouse, 则是无效订单。一般来说 ol_supply_w_id == w_id.
 	    // While looping we also determine o_all_local.
 	    if (newOrder.ol_supply_w_id[ol_cnt] != newOrder.w_id)
-		o_all_local = 0;
+		    o_all_local = 0;
 	}
 
+	// 将 newOrder 按照 (ol_supply_w_id, ol_i_id) 顺序从小到大排序, 顺序保存在 ol_seq.
+	// 由于是批量，因此需要排序保证事务中上锁的顺序.
 	for (int x = 0; x < ol_cnt - 1; x++)
 	{
 	    for (int y = x + 1; y < ol_cnt; y++)
@@ -356,10 +372,13 @@ public class jTPCCTData
 	}
 
 	// The above also provided the output value for o_ol_cnt;
-	newOrder.o_ol_cnt = ol_cnt;
+	newOrder.o_ol_cnt = ol_cnt; // 有效的订单数
 
 	try {
 	    // Retrieve the required data from DISTRICT
+		/** 注意这里用了 FOR UPDATE, 锁了 bmsql_district(d_w_id, d_id), 因为后续需要查询 bmsql_district.d_next_o_id. */
+		// SELECT d_tax, d_next_o_id FROM bmsql_district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE
+		// 一个 newOrder 中所有订单来自同一地区的仓库. 注意从 bmsql_district 获取订单号.
 	    stmt = db.stmtNewOrderSelectDist;
 	    stmt.setInt(1, newOrder.w_id);
 	    stmt.setInt(2, newOrder.d_id);
@@ -371,12 +390,15 @@ public class jTPCCTData
 			" W_ID=" + newOrder.w_id +
 			" D_ID=" + newOrder.d_id + " not found");
 	    }
-	    newOrder.d_tax      = rs.getDouble("d_tax");
-	    newOrder.o_id       = rs.getInt("d_next_o_id");
-	    o_id = newOrder.o_id;
+		/** 从 bmsql_district.d_next_o_id 获取订单号. 确保订单号唯一. */
+	    newOrder.d_tax      = rs.getDouble("d_tax");    // bmsql_district.d_tax
+	    newOrder.o_id       = rs.getInt("d_next_o_id"); // bmsql_district.d_next_o_id
+	    o_id = newOrder.o_id; // bmsql_district.d_next_o_id
 	    rs.close();
 
 	    // Retrieve the required data from CUSTOMER and WAREHOUSE
+		// SELECT c_discount, c_last, c_credit, w_tax FROM bmsql_customer JOIN bmsql_warehouse ON (w_id = c_w_id) WHERE c_w_id = 1 AND c_d_id = 10 AND c_id = 346;
+		// 获取用户信息，比如折扣.
 	    stmt = db.stmtNewOrderSelectWhseCust;
 	    stmt.setInt(1, newOrder.w_id);
 	    stmt.setInt(2, newOrder.d_id);
@@ -390,19 +412,23 @@ public class jTPCCTData
 			" D_ID=" + newOrder.d_id +
 			" C_ID=" + newOrder.c_id + " not found");
 	    }
-	    newOrder.w_tax      = rs.getDouble("w_tax");
-	    newOrder.c_last     = rs.getString("c_last");
-	    newOrder.c_credit   = rs.getString("c_credit");
-	    newOrder.c_discount = rs.getDouble("c_discount");
+	    newOrder.w_tax      = rs.getDouble("w_tax");       // bmsql_warehouse.w_tax
+	    newOrder.c_last     = rs.getString("c_last");      // bmsql_customer.c_last
+	    newOrder.c_credit   = rs.getString("c_credit");    // bmsql_customer.c_credit
+	    newOrder.c_discount = rs.getDouble("c_discount");  // bmsql_customer.c_discount
 	    rs.close();
 
 	    // Update the DISTRICT bumping the D_NEXT_O_ID
+		/** 更新自增了订单号生成器 bmsql_district.d_next_o_id */
+		// UPDATE bmsql_district SET d_next_o_id = d_next_o_id + 1 WHERE d_w_id = ? AND d_id = ?;
 	    stmt = db.stmtNewOrderUpdateDist;
 	    stmt.setInt(1, newOrder.w_id);
 	    stmt.setInt(2, newOrder.d_id);
 	    stmt.executeUpdate();
 
 	    // Insert the ORDER row
+		// INSERT INTO bmsql_oorder (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) VALUES (3001, 1, 1, 2571, '2022-07-04 10:49:25.439000', 11, 1);
+		// bmsql_oorder 比 bmsql_new_order 更详细.
 	    stmt = db.stmtNewOrderInsertOrder;
 	    stmt.setInt(1, o_id);
 	    stmt.setInt(2, newOrder.d_id);
@@ -414,6 +440,7 @@ public class jTPCCTData
 	    stmt.executeUpdate();
 
 	    // Insert the NEW_ORDER row
+		// INSERT INTO bmsql_new_order (no_o_id, no_d_id, no_w_id) VALUES (3001, 10, 1);
 	    stmt = db.stmtNewOrderInsertNewOrder;
 	    stmt.setInt(1, o_id);
 	    stmt.setInt(2, newOrder.d_id);
@@ -421,29 +448,36 @@ public class jTPCCTData
 	    stmt.executeUpdate();
 
 	    // Per ORDER_LINE
+		// 插入订单明细
+		// INSERT INTO bmsql_order_line (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info) VALUES (3001, 1, 1, 1, 1853, 1, 10, 294.20000000000005, 'nXfhvxeg1zADrUek6DS1PIDo');
 	    insertOrderLineBatch = db.stmtNewOrderInsertOrderLine;
 		int seq0 = ol_seq[0];
         boolean distinct_item = true;
+		// 该用户这个购买购买的商品号 item_id.
         HashSet<Integer> itemIds = new HashSet<Integer>();
 	    for (int i = 0; i < ol_cnt; i++)
 	    {
 		    int seq = ol_seq[i];
             itemIds.add(Integer.valueOf(newOrder.ol_i_id[seq]));
 	    }
-		String distName = "s_dist_0" + String.valueOf(newOrder.d_id);
+		String distName = "s_dist_0" + String.valueOf(newOrder.d_id); // distName是2位数
 		if (newOrder.d_id > 9) {
 			distName = "s_dist_" + String.valueOf(newOrder.d_id);
 		}
+
+		// 找到商品信息
+		// SELECT i_price, i_name, i_data FROM bmsql_item WHERE i_id = 15125;
 		stmt = db.stmtNewOrderSelectItemBatch[itemIds.size()];
 		HashMap<Integer, NewOrderItem> itemMap = new HashMap<Integer,NewOrderItem>();
 		int i_idx = 0;
 		for (Integer x : itemIds) {
 			i_idx ++;
-			stmt.setInt(i_idx, x.intValue());
+			stmt.setInt(i_idx, x.intValue()); // ol_i_id
 		}
 		rs = stmt.executeQuery();
 		while (rs.next())
 		{
+			// 获取订单内各商品的信息
 			int i_id = rs.getInt("i_id");
 			NewOrderItem item = new NewOrderItem();
 			item.i_id = i_id;
@@ -453,6 +487,7 @@ public class jTPCCTData
 			itemMap.put(i_id, item);
 		}
 		rs.close();
+
 		for (int i = 0; i < ol_cnt; i++)
 		{
 			int seq = ol_seq[i];
@@ -463,6 +498,8 @@ public class jTPCCTData
 				if (transRbk && (i_id < 1 ||
 						i_id > 100000))
 				{
+					// 1% of NEW_ORDER transactions use an unused item
+					// 故意制造无效的 item_id 用于rollback.
 					/*
 					 * Clause 2.4.2.3 mandates that the entire
 					 * transaction profile up to here must be executed
@@ -482,6 +519,8 @@ public class jTPCCTData
 			}
 		}
 
+		/** 注意这里 FOR UPDATE bmsql_stock(s_w_id, s_i_id), 后续要查询并更新 bmsql_stock的库存信息 */
+		// SELECT s_quantity, s_data, s_dist_01, s_dist_02, s_dist_03, s_dist_04, s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, s_dist_10 FROM bmsql_stock WHERE s_w_id = 1 AND s_i_id = 1853 FOR UPDATE;
 		stmt = db.stmtNewOrderSelectStockBatch[ol_cnt];
 		for (int i = 0; i < ol_cnt; ++i) {
 			int seq = ol_seq[i];
@@ -490,6 +529,7 @@ public class jTPCCTData
 		}
 		rs = stmt.executeQuery();
 		while (rs.next()) {
+			// 查询库存bmsql_stock中商品信息
 			int i_id = rs.getInt("s_i_id");
 			int w_id = rs.getInt("s_w_id");
 			NewOrderItem item = itemMap.get(i_id);
@@ -498,10 +538,11 @@ public class jTPCCTData
 			for (int i = 0; i < ol_cnt; i ++) {
 				int seq = ol_seq[i];
 				if (newOrder.ol_i_id[seq] == i_id && newOrder.ol_supply_w_id[seq] == w_id) {
-					newOrder.s_quantity[seq] = rs.getInt("s_quantity");
+					newOrder.s_quantity[seq] = rs.getInt("s_quantity"); // 本地warehouse的库存数量
 					newOrder.dist_value[seq] = rs.getString(distName);
 					newOrder.found[seq] = true;
 					if (item != null) {
+						// ol_quantity 是商品数量，ol_amount 是总价
 						newOrder.ol_amount[seq] = item.i_price * newOrder.ol_quantity[seq];
 						if (item.i_data.contains("ORIGINAL") &&
 								rs.getString("s_data").contains("ORIGINAL"))
@@ -528,19 +569,25 @@ public class jTPCCTData
 			}
 
 
+			// 计算该订单的总价
 			total_amount += newOrder.ol_amount[seq] *
 					(1.0 - newOrder.c_discount) *
 					(1.0 + newOrder.w_tax + newOrder.d_tax);
+
+			// UPDATE bmsql_stock SET s_quantity = 14, s_ytd = s_ytd + 3, s_order_cnt = s_order_cnt + 1, s_remote_cnt = s_remote_cnt + 0 WHERE s_w_id = 1 AND s_i_id = 2297;
 			stmt = db.stmtNewOrderUpdateStock;
 			// Update the STOCK row.
+			// s_quantity 是库存数量，ol_quantity 是购买的商品数量([1, 10])
+			/** 有自动库存补充，是不是意味着 库存数量始终不会为 0？*/
 			if (newOrder.s_quantity[seq] >= newOrder.ol_quantity[seq] + 10)
 				stmt.setInt(1, newOrder.s_quantity[seq] -
 						newOrder.ol_quantity[seq]);
 			else
-				stmt.setInt(1, newOrder.s_quantity[seq] + 91);
-			stmt.setInt(2, newOrder.ol_quantity[seq]);
+				stmt.setInt(1, newOrder.s_quantity[seq] + 91); // 这是库存不够进行补充？
+			stmt.setInt(2, newOrder.ol_quantity[seq]); // s_ytd 是出售量
+
 			if (newOrder.ol_supply_w_id[seq] == newOrder.w_id)
-				stmt.setInt(3, 0);
+				stmt.setInt(3, 0); // s_remote_cnt是不是本地的仓库
 			else
 				stmt.setInt(3, 1);
 			stmt.setInt(4, newOrder.ol_supply_w_id[seq]);
@@ -548,6 +595,7 @@ public class jTPCCTData
 			stmt.executeUpdate();
 
 			// Insert the ORDER_LINE row.
+			// INSERT INTO bmsql_order_line
 			insertOrderLineBatch.setInt(1, o_id);
 			insertOrderLineBatch.setInt(2, newOrder.d_id);
 			insertOrderLineBatch.setInt(3, newOrder.w_id);
@@ -677,13 +725,14 @@ public class jTPCCTData
     private class NewOrderData
     {
 	/* terminal input data */
-	public int      w_id;
-	public int      d_id;
-	public int      c_id;
+	public int      w_id; // terminalWarehouse
+	public int      d_id; // district_id, [1, 10]
+	public int      c_id; // customer_id, [1, 3000]
 
-	public int      ol_supply_w_id[] = new int[15];
-	public int      ol_i_id[] = new int[15];
-	public int      ol_quantity[] = new int[15];
+	// o_ol_cnt [5, 15]
+	public int      ol_supply_w_id[] = new int[15]; // warehouse_id
+	public int      ol_i_id[] = new int[15]; // item_id, [1, 100000]. 0 表示无效.
+	public int      ol_quantity[] = new int[15]; // [1, 10]
 
 	/* terminal output data */
 	public String   c_last;
@@ -691,9 +740,9 @@ public class jTPCCTData
 	public double   c_discount;
 	public double   w_tax;
 	public double   d_tax;
-	public int      o_ol_cnt;
+	public int      o_ol_cnt; // 有效的订单数
 	public int      o_id;
-	public String   o_entry_d;
+	public String   o_entry_d; // 更新timestamp
 	public double   total_amount;
 	public String   execution_status;
 
@@ -727,18 +776,22 @@ public class jTPCCTData
 	delivery        = null;
 	deliveryBG      = null;
 
+	// 支付的 (w_id, d_id) 也是固定的. 一个用户一笔帐.
 	payment.w_id    = terminalWarehouse;    // 2.5.1.1
 	payment.d_id    = rnd.nextInt(1, 10);   // 2.5.1.2
 	payment.c_w_id  = payment.w_id;
 	payment.c_d_id  = payment.d_id;
 	if (rnd.nextInt(1, 100) > 85)
 	{
+		// 15% 支付的warehouse不为 terminalWarehouse.
 	    payment.c_d_id = rnd.nextInt(1, 10);
 	    while (payment.c_w_id == payment.w_id && numWarehouses > 1)
-		payment.c_w_id = rnd.nextInt(1, numWarehouses);
+		    payment.c_w_id = rnd.nextInt(1, numWarehouses);
 	}
+
 	if (rnd.nextInt(1, 100) <= 60)
 	{
+		// 60% 客户id是 0？
 	    payment.c_last = rnd.getCLast();
 	    payment.c_id = 0;
 	}
@@ -749,6 +802,7 @@ public class jTPCCTData
 	}
 
 	// 2.5.1.3
+	// 支付金额 h_amount, [1, 5000].
 	payment.h_amount = ((double)rnd.nextLong(100, 500000)) / 100.0;
     }
 
@@ -764,6 +818,8 @@ public class jTPCCTData
 	try
 	{
 	    // Update the DISTRICT.
+		// UPDATE bmsql_district SET d_ytd = d_ytd + 2278.22 WHERE d_w_id = 1 AND d_id = 3;
+		// 更新 bmsql_district 地区统计的金额总量 h_amount, update操作默认上行锁，无需外部上锁
 	    stmt = db.stmtPaymentUpdateDistrict;
 	    stmt.setDouble(1, payment.h_amount);
 	    stmt.setInt(2, payment.w_id);
@@ -771,10 +827,11 @@ public class jTPCCTData
 	    stmt.executeUpdate();
 
 	    // Select the DISTRICT.
+		// SELECT d_name, d_street_1, d_street_2, d_city, d_state, d_zip FROM bmsql_district WHERE d_w_id = ? AND d_id = ?;
+		// 查询 (w_id, d_id) 地区信息是否有效.
 	    stmt = db.stmtPaymentSelectDistrict;
 	    stmt.setInt(1, payment.w_id);
 	    stmt.setInt(2, payment.d_id);
-		// 同步发送.
 	    rs = stmt.executeQuery();
 	    if (!rs.next())
 	    {
@@ -783,7 +840,7 @@ public class jTPCCTData
 			" W_ID=" + payment.w_id +
 			" D_ID=" + payment.d_id + " not found");
 	    }
-		// 返回值都用string.
+		// 获取地区信息
 	    payment.d_name = rs.getString("d_name");
 	    payment.d_street_1 = rs.getString("d_street_1");
 	    payment.d_street_2 = rs.getString("d_street_2");
@@ -793,12 +850,16 @@ public class jTPCCTData
 	    rs.close();
 
 	    // Update the WAREHOUSE.
+		// UPDATE bmsql_warehouse SET w_ytd = w_ytd + 2278.22 WHERE w_id = 1;
+		// 更新 bmsql_warehouse 仓库统计的金额总量 h_amount,
 	    stmt = db.stmtPaymentUpdateWarehouse;
 	    stmt.setDouble(1, payment.h_amount);
 	    stmt.setInt(2, payment.w_id);
 	    stmt.executeUpdate();
 
 	    // Select the WAREHOUSE.
+		// SELECT w_name, w_street_1, w_street_2, w_city, w_state, w_zip FROM bmsql_warehouse WHERE w_id = ?;
+		// 获取仓库信息
 	    stmt = db.stmtPaymentSelectWarehouse;
 	    stmt.setInt(1, payment.w_id);
 	    rs = stmt.executeQuery();
@@ -840,6 +901,8 @@ public class jTPCCTData
 	    }
 
 	    // Select the CUSTOMER.
+		// SELECT c_id FROM bmsql_customer WHERE c_w_id = ? AND c_d_id = ? AND c_last = ? ORDER BY c_first;
+		// 获取用户信息
 	    stmt = db.stmtPaymentSelectCustomer;
 	    stmt.setInt(1, payment.c_w_id);
 	    stmt.setInt(2, payment.c_d_id);
@@ -875,6 +938,8 @@ public class jTPCCTData
 	    if (payment.c_credit.equals("GC"))
 	    {
 		// Customer with good credit, don't update C_DATA.
+		// UPDATE bmsql_customer SET c_balance = c_balance - ?, c_ytd_payment = c_ytd_payment + ?, c_payment_cnt = c_payment_cnt + 1 WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?;
+		// 更新买家的余额信息 c_balance, c_ytd_payment
 		stmt = db.stmtPaymentUpdateCustomer;
 		stmt.setDouble(1, payment.h_amount);
 		stmt.setDouble(2, payment.h_amount);
@@ -924,6 +989,8 @@ public class jTPCCTData
 	    }
 
 	    // Insert the HISORY row.
+		// INSERT INTO bmsql_history (h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, h_date, h_amount, h_data) VALUES (1747, 3, 1, 3, 1, '2022-07-04 10:49:27.660000', 2278.22, 't79oP7hw    e3eZAoPAdn');
+		// 支付过的信息插入 bmsql_history
 	    stmt = db.stmtPaymentInsertHistory;
 	    stmt.setInt(1, payment.c_id);
 	    stmt.setInt(2, payment.c_d_id);
@@ -1142,6 +1209,8 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 	    // If C_LAST is given instead of C_ID (60%), determine the C_ID.
 	    if (orderStatus.c_last != null)
 	    {
+		// SELECT c_id FROM bmsql_customer WHERE c_w_id = ? AND c_d_id = ? AND c_last = ? ORDER BY c_first;
+		// 从 bmsql_customer 查询用户id
 		stmt = db.stmtOrderStatusSelectCustomerListByLast;
 		stmt.setInt(1, orderStatus.w_id);
 		stmt.setInt(2, orderStatus.d_id);
@@ -1183,6 +1252,7 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 	    rs.close();
 
 	    // Select the last ORDER for this customer.
+		// 查询 bmsql_oorder
 	    stmt = db.stmtOrderStatusSelectLastOrder;
 	    stmt.setInt(1, orderStatus.w_id);
 	    stmt.setInt(2, orderStatus.d_id);
@@ -1202,6 +1272,7 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 		orderStatus.o_carrier_id = -1;
 	    rs.close();
 
+		// 查询 bmsql_order_line
 	    stmt = db.stmtOrderStatusSelectOrderLine;
 	    stmt.setInt(1, orderStatus.w_id);
 	    stmt.setInt(2, orderStatus.d_id);
@@ -1375,6 +1446,7 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 
 	try
 	{
+		// bmsql_stock 聚合查询 数量 < threshold 的商品数
 	    stmt = db.stmtStockLevelSelectLow;
 	    stmt.setInt(1, stockLevel.w_id);
 	    stmt.setInt(2, stockLevel.threshold);
@@ -1603,6 +1675,8 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 	    for (d_id = 1; d_id <= 10; d_id++) {
 			o_id = -1;
 
+			// SELECT no_o_id FROM bmsql_new_order WHERE no_w_id = ? AND no_d_id = ? ORDER BY no_o_id ASC
+			// 从 bmsql_new_order 查询最旧订单
 			stmt1 = db.stmtDeliveryBGSelectOldestNewOrder;
 
 			/*
@@ -1634,6 +1708,9 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 			}
 			deliveryBG.delivered_o_id[d_id - 1] = o_id;
 		}
+
+		// DELETE FROM bmsql_new_order WHERE no_w_id = ? AND no_d_id = ? AND no_o_id = ?;
+		/** 从 bmsql_new_order 删除此订单 */
 		stmt1 = db.stmtDeliveryBGDeleteOldestNewOrder;
 		for (d_id = 1; d_id <= 10; d_id++) {
 			stmt1.setInt(d_id * 3 - 2, deliveryBG.w_id);
@@ -1649,6 +1726,9 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 		 */
 
 		// Update the ORDER setting the o_carrier_id.
+		// UPDATE bmsql_oorder SET o_carrier_id = ? WHERE o_w_id = ? AND o_d_id = ? AND o_id = ?;
+		// 更新 o_carrier_id 订单状态 o_carrier_id
+		// 注意更新表的顺序，防止死锁
 		stmt1 = db.stmtDeliveryBGUpdateOrder;
 		stmt1.setInt(1, deliveryBG.o_carrier_id);
 		for (d_id = 1; d_id <= 10; d_id++) {
@@ -1660,6 +1740,7 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 		stmt1.executeUpdate();
 
 		// Get the o_c_id from the ORDER.
+		// SELECT o_c_id FROM bmsql_oorder WHERE o_w_id = ? AND o_d_id = ? AND o_id = ?;
 		stmt1 = db.stmtDeliveryBGSelectOrder;
 		for (d_id = 1; d_id <= 10; d_id++) {
 			stmt1.setInt(d_id * 3 - 2, deliveryBG.w_id);
@@ -1685,6 +1766,8 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 		}
 
 		// Update ORDER_LINE setting the ol_delivery_d.
+		// UPDATE bmsql_order_line SET ol_delivery_d = ? WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id = ?;
+		// 更新订单明细中 bmsql_order_line 的状态
 		stmt1 = db.stmtDeliveryBGUpdateOrderLine;
 		stmt1.setTimestamp(1, new java.sql.Timestamp(now));
 		for (d_id = 1; d_id <= 10; d_id++) {
@@ -1695,7 +1778,7 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 		stmt1.executeUpdate();
 
 		// Select the sum(ol_amount) from ORDER_LINE.
-
+		// SELECT sum(ol_amount) AS sum_ol_amount FROM bmsql_order_line WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id = ?;
 		stmt1 = db.stmtDeliveryBGSelectSumOLAmount;
 		for (d_id = 1; d_id <= 10; d_id++) {
 			stmt1.setInt(d_id * 3 - 2, deliveryBG.w_id);
@@ -1725,6 +1808,8 @@ log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 						" OL_O_ID=" + o_id + " not found");
 			}
 			c_id = deliveryBG.delivered_c_id[d_id - 1];
+			// UPDATE bmsql_customer SET c_balance = c_balance + ?, c_delivery_cnt = c_delivery_cnt + 1 WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?
+			// 更新卖家的余额信息
 			stmt1 = db.stmtDeliveryBGUpdateCustomer;
 			stmt1.setDouble(1, ans);
 			stmt1.setInt(2, deliveryBG.w_id);

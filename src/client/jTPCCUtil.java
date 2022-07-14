@@ -64,6 +64,9 @@ public class jTPCCUtil implements jTPCCConfig
 	return dS.length() > 6 ? dS.substring(0, 6) : dS;
     }
 
+    /**
+     * 从 bmsql_config 获取配置;
+     */
     public static String getConfig(String db, Properties dbProps, String option)
 	throws Exception
     {
@@ -73,6 +76,8 @@ public class jTPCCUtil implements jTPCCConfig
 	if (dbConn == null)
 	{
 	    dbConn = DriverManager.getConnection(db, dbProps);
+        // SELECT cfg_value FROM bmsql_config  WHERE cfg_name = 'warehouses'
+        //  SELECT cfg_value FROM bmsql_config  WHERE cfg_name = 'nURandCLast'
 	    stmtGetConfig = dbConn.prepareStatement(
 		"SELECT cfg_value FROM bmsql_config " +
 		" WHERE cfg_name = ?");

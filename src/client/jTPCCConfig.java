@@ -31,6 +31,7 @@ public interface jTPCCConfig
 
     public final static int  configCommitCount  = 10000;  // commit every n records in LoadData
 
+    // 这个不能修改? JTPCCRandom内写固定了.
     public final static int  configWhseCount    = 10;
     public final static int  configItemCount    = 100000; // tpc-c std = 100,000
     public final static int  configDistPerWhse  = 10;     // tpc-c std = 10
